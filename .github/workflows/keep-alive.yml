@@ -1,0 +1,28 @@
+# Keeps the free Render instance awake for the public demo.
+# Render's free plan sleeps a web service after 15 minutes without traffic;
+# a ping every 10 minutes prevents that. One always-on service uses ~744 of
+# the 750 free instance hours a month, so don't add a second pinged service.
+# GitHub may delay scheduled runs at busy times and pauses schedules in a repo
+# with no commits for 60 days — push something (or re-enable the workflow) if so.
+name: Keep API awake
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping health endpoint
+        env:
+          API_URL: https://vms-api-i6p8.onrender.com
+        run: |
+          # A sleeping instance can take ~1 minute to wake, so allow for it.
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 120 --retry 2 --retry-delay 10 "$API_URL/actuator/health" || true)
+          echo "health: $code"
+          [ "$code" = "200" ]
