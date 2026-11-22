@@ -1,0 +1,25 @@
+# Every path has an owning team; GitHub requests their review automatically.
+# Team names are placeholders — replace with your org's real GitHub teams.
+
+*                          @datavvy/architecture
+
+# Agent configuration and shared standards: architecture group signs off.
+/AGENTS.md                 @datavvy/architecture
+/.agents/                  @datavvy/architecture
+/docs/                     @datavvy/architecture
+
+# API contract: both sides must approve (frontend lives in datavvy-vms-frontend).
+/contracts/                @datavvy/backend-leads @datavvy/frontend-leads
+
+# Modules
+/pom.xml                   @datavvy/backend-leads
+/vms-platform/             @datavvy/platform-team
+/vms-auth/                 @datavvy/platform-team
+/vms-catalog/              @datavvy/fleet-settings-team
+/vms-vehicle/              @datavvy/fleet-core-team
+/vms-dashboard/            @datavvy/insights-team
+/vms-app/                  @datavvy/backend-leads
+
+# Deployment
+/render.yaml               @datavvy/platform-team
+/Dockerfile                @datavvy/platform-team

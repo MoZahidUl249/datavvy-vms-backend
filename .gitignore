@@ -1,0 +1,17 @@
+# Build output
+target/
+
+# Local settings and secrets (see .env.example)
+.env
+.env.*
+!.env.example
+
+# Tools the scripts download, logs
+.tools/
+*.log
+
+# IDE / OS
+*.iml
+.idea/
+.vscode/
+.DS_Store

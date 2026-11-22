@@ -1,0 +1,459 @@
+openapi: 3.0.3
+info:
+  title: Datavvy VMS API
+  version: 1.0.0
+  description: |
+    Contract between the Flutter web client and the Spring Boot backend.
+
+    **This file is the source of truth.** Change it first, in its own PR,
+    reviewed by both the backend and frontend owners (see CODEOWNERS and
+    `.agents/workflows/api-change.md`). Backend controllers and the Flutter
+    API models must match it; the running server also serves its generated
+    spec at `/v3/api-docs` for comparison.
+
+    Conventions
+    - Base path `/api/v1`. Breaking changes need `/api/v2`.
+    - JSON, camelCase. Timestamps are ISO-8601 UTC instants; calendar days are `YYYY-MM-DD`
+      in the business time zone (Asia/Dhaka).
+    - Errors are RFC 9457 problem documents with a stable `code` (see `Problem`).
+    - Auth: `Authorization: Bearer <jwt>` from `POST /auth/login`.
+servers:
+  - url: http://localhost:8080/api/v1
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Auth
+  - name: Vehicles
+  - name: Catalog
+  - name: Dashboard
+
+paths:
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Sign in
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: Signed in
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenResponse' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401':
+          description: "code: INVALID_CREDENTIALS"
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Current user
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthUser' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /vehicles:
+    get:
+      tags: [Vehicles]
+      summary: List vehicles (filter, search, sort, page)
+      parameters:
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/VehicleStatus' } }
+        - { name: q, in: query, description: Matches vehicle number (ignoring spaces/hyphens), company, type, brand, model., schema: { type: string } }
+        - { name: type, in: query, style: form, explode: true, schema: { type: array, items: { type: string } } }
+        - { name: company, in: query, style: form, explode: true, schema: { type: array, items: { type: string } } }
+        - { name: brand, in: query, style: form, explode: true, schema: { type: array, items: { type: string } } }
+        - { name: updatedOn, in: query, schema: { type: string, format: date } }
+        - { name: addedOn, in: query, schema: { type: string, format: date } }
+        - { name: page, in: query, schema: { type: integer, default: 0, minimum: 0 } }
+        - { name: size, in: query, schema: { type: integer, default: 20, maximum: 100 } }
+        - name: sort
+          in: query
+          description: "`field,asc|desc`. Fields: vehicleNumber, company, type, brand, model, status, createdAt, updatedAt."
+          schema: { type: string, default: 'updatedAt,desc' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VehiclePage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Vehicles]
+      summary: Create a vehicle (ADMIN, FLEET_MANAGER)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VehicleRequest' }
+      responses:
+        '201':
+          description: Created. `Location` header points at the new vehicle.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Vehicle' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/DuplicateVehicleNumber' }
+
+  /vehicles/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+    get:
+      tags: [Vehicles]
+      summary: Get one vehicle
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Vehicle' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Vehicles]
+      summary: Update a vehicle (send the `version` you loaded)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VehicleRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Vehicle' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: "code: DUPLICATE_VEHICLE_NUMBER or STALE_VERSION"
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+    delete:
+      tags: [Vehicles]
+      summary: Delete a vehicle (ADMIN, FLEET_MANAGER)
+      responses:
+        '204': { description: Deleted }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /vehicles/facets:
+    get:
+      tags: [Vehicles]
+      summary: Status counts, companies, brands and dates that have data (for the filter panel)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VehicleFacets' }
+
+  /vehicles/number-check:
+    get:
+      tags: [Vehicles]
+      summary: Live duplicate check for the Vehicle Number field
+      parameters:
+        - { name: number, in: query, required: true, schema: { type: string } }
+        - { name: excludeId, in: query, description: The vehicle being edited., schema: { type: integer, format: int64 } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VehicleNumberCheck' }
+
+  /catalog/{kind}:
+    parameters:
+      - { name: kind, in: path, required: true, schema: { type: string, enum: [vehicle-types] } }
+    get:
+      tags: [Catalog]
+      summary: List values with usage counts
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/CatalogItem' }
+    post:
+      tags: [Catalog]
+      summary: Add a value (ADMIN)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CatalogItemRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CatalogItem' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '409':
+          description: "code: CATALOG_DUPLICATE_NAME"
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /catalog/{kind}/{id}:
+    parameters:
+      - { name: kind, in: path, required: true, schema: { type: string, enum: [vehicle-types] } }
+      - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+    patch:
+      tags: [Catalog]
+      summary: Rename a value (ADMIN). Not allowed while vehicles use it (409 CATALOG_ITEM_IN_USE).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CatalogItemRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CatalogItem' }
+        '409':
+          description: "code: CATALOG_DUPLICATE_NAME"
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+    delete:
+      tags: [Catalog]
+      summary: Remove a value (ADMIN). Values in use, or the last value, can't be removed.
+      responses:
+        '204': { description: Removed }
+        '409':
+          description: "code: CATALOG_ITEM_IN_USE (details.usageCount)"
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '422':
+          description: "code: CATALOG_KEEP_ONE"
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /dashboard/summary:
+    get:
+      tags: [Dashboard]
+      summary: Fleet KPIs, breakdowns and short lists
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DashboardSummary' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    Unauthorized:
+      description: Missing or expired token
+    Forbidden:
+      description: "code: FORBIDDEN — role not allowed"
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: "code: <RESOURCE>_NOT_FOUND"
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    ValidationFailed:
+      description: "code: VALIDATION_FAILED, with fieldErrors"
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    DuplicateVehicleNumber:
+      description: "code: DUPLICATE_VEHICLE_NUMBER (details.field, details.vehicleNumber, details.existingId)"
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  schemas:
+    Problem:
+      type: object
+      required: [status, code]
+      properties:
+        type: { type: string, example: about:blank }
+        title: { type: string, example: Conflict }
+        status: { type: integer, example: 409 }
+        detail: { type: string, example: A vehicle with number DHA-METRO-GA 11-4582 already exists. }
+        code: { type: string, example: DUPLICATE_VEHICLE_NUMBER }
+        fieldErrors:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string, example: vehicleNumber }
+              message: { type: string, example: 'Enter the full vehicle number, like DHA-METRO-GA 11-4582.' }
+        details:
+          type: object
+          additionalProperties: true
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, example: admin@datavvy.com }
+        password: { type: string, format: password }
+
+    AuthUser:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        email: { type: string }
+        displayName: { type: string }
+        role: { type: string, enum: [ADMIN, FLEET_MANAGER, VIEWER] }
+
+    TokenResponse:
+      type: object
+      properties:
+        accessToken: { type: string }
+        tokenType: { type: string, example: Bearer }
+        expiresIn: { type: integer, description: Seconds, example: 28800 }
+        user: { $ref: '#/components/schemas/AuthUser' }
+
+    VehicleStatus:
+      type: string
+      enum: [ACTIVE, INACTIVE, MAINTENANCE]
+
+    VehicleRequest:
+      type: object
+      description: The course fields. `version` is required on update and ignored on create.
+      required: [vehicleNumber, company, type, brand, model, status]
+      properties:
+        vehicleNumber:
+          type: string
+          maxLength: 32
+          description: Loose input accepted; stored as `AREA[-METRO]-CLASS SS-NNNN`. Unique ignoring case, spaces and hyphens.
+          example: DHA-METRO-GA 11-4582
+        company: { type: string, maxLength: 100, example: Datavvy Logistics }
+        type: { type: string, maxLength: 60, description: A name from /catalog/vehicle-types (case-insensitive)., example: Microbus }
+        brand: { type: string, maxLength: 60, example: Toyota }
+        model: { type: string, maxLength: 60, example: Hiace }
+        status: { $ref: '#/components/schemas/VehicleStatus' }
+        version: { type: integer, format: int64 }
+
+    Vehicle:
+      type: object
+      properties:
+        id: { type: integer, format: int64, description: Generated primary key. }
+        vehicleNumber: { type: string, example: DHA-METRO-GA 11-4582 }
+        company: { type: string }
+        type: { type: string }
+        brand: { type: string }
+        model: { type: string }
+        status: { $ref: '#/components/schemas/VehicleStatus' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        version: { type: integer, format: int64 }
+
+    VehiclePage:
+      type: object
+      properties:
+        content:
+          type: array
+          items: { $ref: '#/components/schemas/Vehicle' }
+        page: { type: integer }
+        size: { type: integer }
+        totalElements: { type: integer, format: int64 }
+        totalPages: { type: integer }
+
+    VehicleFacets:
+      type: object
+      properties:
+        statusCounts:
+          type: object
+          properties:
+            all: { type: integer, format: int64 }
+            active: { type: integer, format: int64 }
+            inactive: { type: integer, format: int64 }
+            maintenance: { type: integer, format: int64 }
+        companies: { type: array, items: { type: string } }
+        brands: { type: array, items: { type: string } }
+        updatedDates: { type: array, items: { type: string, format: date } }
+        addedDates: { type: array, items: { type: string, format: date } }
+
+    VehicleNumberCheck:
+      type: object
+      properties:
+        valid: { type: boolean }
+        available: { type: boolean }
+        normalized: { type: string, nullable: true }
+        existingId: { type: integer, format: int64, nullable: true }
+        existingVehicleNumber: { type: string, nullable: true }
+
+    VehicleSummary:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        vehicleNumber: { type: string }
+        company: { type: string }
+        brand: { type: string }
+        model: { type: string }
+        status: { $ref: '#/components/schemas/VehicleStatus' }
+        updatedAt: { type: string, format: date-time }
+
+    CatalogItem:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        kind: { type: string, enum: [vehicle-types] }
+        name: { type: string }
+        sortOrder: { type: integer }
+        usageCount: { type: integer, format: int64 }
+
+    CatalogItemRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, maxLength: 60, example: Ambulance }
+
+    DashboardSummary:
+      type: object
+      properties:
+        kpis:
+          type: object
+          properties:
+            total: { type: integer, format: int64 }
+            active: { type: integer, format: int64 }
+            inactive: { type: integer, format: int64 }
+            maintenance: { type: integer, format: int64 }
+        byType:
+          type: array
+          items: { $ref: '#/components/schemas/Slice' }
+        byBrand:
+          type: array
+          items: { $ref: '#/components/schemas/Slice' }
+        recentlyUpdated:
+          type: array
+          items: { $ref: '#/components/schemas/VehicleSummary' }
+        inMaintenance:
+          type: array
+          items: { $ref: '#/components/schemas/VehicleSummary' }
+
+    Slice:
+      type: object
+      properties:
+        name: { type: string }
+        count: { type: integer, format: int64 }

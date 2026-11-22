@@ -1,0 +1,399 @@
+{
+  "info": {
+    "name": "VMS \u2014 Vehicles API",
+    "description": "Run in order (Collection Runner). Backend on :8080 with the local profile.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080/api/v1"
+    },
+    {
+      "key": "vehicleNumber",
+      "value": "RAJ-KA 11-1111"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "vehicleId",
+      "value": ""
+    },
+    {
+      "key": "version",
+      "value": "0"
+    }
+  ],
+  "item": [
+    {
+      "name": "1 Login (manager)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "login"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"manager@datavvy.com\",\n  \"password\": \"Manager@12345\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "pm.collectionVariables.set('token', pm.response.json().accessToken);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2 Create vehicle",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/vehicles",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "vehicles"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"vehicleNumber\": \"{{vehicleNumber}}\",\n  \"company\": \"Datavvy Logistics\",\n  \"type\": \"Microbus\",\n  \"brand\": \"Toyota\",\n  \"model\": \"Hiace\",\n  \"status\": \"ACTIVE\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "const v = pm.response.json();",
+              "pm.collectionVariables.set('vehicleId', v.id);",
+              "pm.collectionVariables.set('version', v.version);",
+              "pm.test('canonical number', () => pm.expect(v.vehicleNumber).to.eql('RAJ-KA 11-1111'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3 List vehicles",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/vehicles?page=0&size=20&sort=updatedAt,desc",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "vehicles"
+          ],
+          "query": [
+            {
+              "key": "page",
+              "value": "0"
+            },
+            {
+              "key": "size",
+              "value": "20"
+            },
+            {
+              "key": "sort",
+              "value": "updatedAt,desc"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "pm.test('has content', () => pm.expect(pm.response.json().content).to.be.an('array'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4 Get vehicle",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/vehicles/{{vehicleId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "vehicles",
+            "{{vehicleId}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5 Update vehicle",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/vehicles/{{vehicleId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "vehicles",
+            "{{vehicleId}}"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"vehicleNumber\": \"{{vehicleNumber}}\",\n  \"company\": \"Datavvy Logistics\",\n  \"type\": \"Microbus\",\n  \"brand\": \"Toyota\",\n  \"model\": \"Hiace GL\",\n  \"status\": \"MAINTENANCE\",\n  \"version\": {{version}}\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "pm.test('status MAINTENANCE', () => pm.expect(pm.response.json().status).to.eql('MAINTENANCE'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6 Duplicate vehicle number \u2192 409",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/vehicles",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "vehicles"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"vehicleNumber\": \"raj ka 11 1111\",\n  \"company\": \"Datavvy Logistics\",\n  \"type\": \"Microbus\",\n  \"brand\": \"Toyota\",\n  \"model\": \"Hiace\",\n  \"status\": \"ACTIVE\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+              "pm.test('code', () => pm.expect(pm.response.json().code).to.eql('DUPLICATE_VEHICLE_NUMBER'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "7 Validation error \u2192 400",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/vehicles",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "vehicles"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"vehicleNumber\": \"DHA 1\",\n  \"company\": \"\",\n  \"type\": \"Spaceship\",\n  \"brand\": \"Toyota\",\n  \"model\": \"Hiace\",\n  \"status\": \"ACTIVE\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('400', () => pm.response.to.have.status(400));",
+              "pm.test('fieldErrors', () => pm.expect(pm.response.json().fieldErrors.length).to.be.above(0));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "8 Delete vehicle",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/vehicles/{{vehicleId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "vehicles",
+            "{{vehicleId}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('204', () => pm.response.to.have.status(204));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "9 Get deleted \u2192 404",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/vehicles/{{vehicleId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "vehicles",
+            "{{vehicleId}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('404', () => pm.response.to.have.status(404));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+# `demo` profile: loads the demo users (admin / manager / viewer) and the
+# sample vehicles on top of the schema. Used by the public demo deployment and,
+# through the `local` group, by local runs. Never enable on real data.
+spring:
+  flyway:
+    locations:
+      - classpath:db/migration/auth
+      - classpath:db/migration/catalog
+      - classpath:db/migration/vehicle
+      - classpath:db/seed

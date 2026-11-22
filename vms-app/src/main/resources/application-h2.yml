@@ -1,0 +1,8 @@
+# `h2` profile: no MySQL needed. File database in MySQL compatibility mode,
+# kept in ~/.vms so data survives restarts. For local demos only — use with
+# `local` for the demo users and vehicles:  -Dspring-boot.run.profiles=local,h2
+spring:
+  datasource:
+    url: jdbc:h2:file:${user.home}/.vms/vmsdb;MODE=MySQL;DATABASE_TO_LOWER=TRUE;AUTO_SERVER=TRUE
+    username: sa
+    password:

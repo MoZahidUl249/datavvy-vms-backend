@@ -1,0 +1,74 @@
+# Base configuration. Every credential comes from the environment: there are
+# deliberately no fallback values here, so a server with a missing variable
+# refuses to start instead of running with a known password or signing key.
+# Local runs read them from the git-ignored .env (see .env.example); the h2
+# profile needs no database credentials at all.
+spring:
+  application:
+    name: vms
+  profiles:
+    group:
+      local: demo
+  datasource:
+    url: ${VMS_DB_URL}
+    username: ${VMS_DB_USER}
+    password: ${VMS_DB_PASSWORD}
+    hikari:
+      maximum-pool-size: ${VMS_DB_POOL:10}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none          # Flyway owns the schema
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    # One folder per module; each team owns its folder (see CODEOWNERS).
+    locations:
+      - classpath:db/migration/auth
+      - classpath:db/migration/catalog
+      - classpath:db/migration/vehicle
+    out-of-order: true        # timestamp versions from parallel branches
+  data:
+    web:
+      pageable:
+        max-page-size: 100
+  mvc:
+    problemdetails:
+      enabled: true
+
+server:
+  port: ${PORT:8080}
+  error:
+    include-message: never
+    include-stacktrace: never
+
+vms:
+  time-zone: Asia/Dhaka
+  security:
+    jwt-secret: ${VMS_JWT_SECRET}   # 32+ characters, e.g. `openssl rand -base64 48`
+    issuer: datavvy-vms
+    token-ttl: 8h
+    cors-allowed-origins: ${VMS_CORS_ORIGINS:http://localhost:*,http://127.0.0.1:*}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        # Readiness includes the database, so a host's health check (Render
+        # uses /actuator/health/readiness) only routes traffic once MySQL answers.
+        readiness:
+          include: readinessState,db
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs

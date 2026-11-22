@@ -1,0 +1,44 @@
+# Local stack. Credentials come from the git-ignored .env (see .env.example);
+# the run-*.command scripts create it on first run.
+#   docker compose up -d mysql                     # database only (run the API from the IDE or run-backend.command)
+#   docker compose --profile full up -d --build    # database + API on http://localhost:8080
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: vms-mysql
+    environment:
+      MYSQL_DATABASE: vms
+      MYSQL_USER: ${VMS_DB_USER:?set VMS_DB_USER in .env}
+      MYSQL_PASSWORD: ${VMS_DB_PASSWORD:?set VMS_DB_PASSWORD in .env}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
+      TZ: UTC
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_0900_ai_ci"]
+    ports:
+      - "3306:3306"
+    volumes:
+      - vms-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u\"$$MYSQL_USER\" -p\"$$MYSQL_PASSWORD\""]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    profiles: ["full"]
+    build: .
+    container_name: vms-backend
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: demo
+      VMS_DB_URL: jdbc:mysql://mysql:3306/vms?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      VMS_DB_USER: ${VMS_DB_USER}
+      VMS_DB_PASSWORD: ${VMS_DB_PASSWORD}
+      VMS_JWT_SECRET: ${VMS_JWT_SECRET:?set VMS_JWT_SECRET in .env}
+      VMS_CORS_ORIGINS: ${VMS_CORS_ORIGINS:-http://localhost:*,http://127.0.0.1:*}
+    ports:
+      - "8080:8080"
+
+volumes:
+  vms-mysql-data:

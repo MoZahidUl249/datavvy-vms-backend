@@ -1,0 +1,5 @@
+# `local` profile: developer machine. Pulls in `demo` (seed data) via the
+# profile group in application.yml and turns up logging.
+logging:
+  level:
+    com.datavvy.vms: DEBUG

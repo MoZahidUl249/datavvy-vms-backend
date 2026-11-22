@@ -1,0 +1,34 @@
+# Render Blueprint for the VMS API (Spring Boot, Docker).
+# Render dashboard → New → Blueprint → pick this repo (datavvy-vms-backend). You'll be prompted for
+# the `sync: false` values; VMS_JWT_SECRET is generated for you.
+# The database is NOT defined here: Render has no managed MySQL, so point
+# VMS_DB_URL at an external MySQL (or add a MySQL private service + disk).
+services:
+  - type: web
+    name: vms-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free            # 512 MB; sleeps after 15 min idle (first request then takes ~1 min)
+    region: singapore     # closest Render region to Bangladesh
+    healthCheckPath: /actuator/health/readiness   # includes the database
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: demo       # schema + demo users and vehicles; remove for real data
+      - key: VMS_DB_URL   # e.g. jdbc:mysql://<host>:4000/vms?sslMode=VERIFY_IDENTITY&createDatabaseIfNotExist=true
+        sync: false
+      - key: VMS_DB_USER
+        sync: false
+      - key: VMS_DB_PASSWORD
+        sync: false
+      - key: VMS_JWT_SECRET
+        generateValue: true
+      - key: VMS_CORS_ORIGINS   # the Netlify site, e.g. https://datavvy-vms.netlify.app
+        sync: false
+      - key: VMS_DB_POOL
+        value: "5"
+      - key: SERVER_TOMCAT_THREADS_MAX
+        value: "30"
+      # Fit Spring Boot into 512 MB: smaller heap share, serial GC, small stacks.
+      - key: JAVA_TOOL_OPTIONS
+        value: -XX:MaxRAMPercentage=65 -XX:+UseSerialGC -Xss512k -XX:TieredStopAtLevel=1
