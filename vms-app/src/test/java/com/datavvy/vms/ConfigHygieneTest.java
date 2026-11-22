@@ -31,7 +31,7 @@ class ConfigHygieneTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"application.yml", "application-local.yml", "application-demo.yml", "application-h2.yml"})
+    @ValueSource(strings = {"application.yml", "application-local.yml", "application-demo.yml", "application-demo-bulk.yml", "application-h2.yml"})
     void noProfileHardCodesAPasswordOrSigningKey(String file) throws IOException {
         // `password:` may be empty (embedded H2) or a ${placeholder}; never a literal.
         var literalPassword = Pattern.compile("(?m)^\\s*password:[ \\t]*(?!\\$\\{)\\S+");

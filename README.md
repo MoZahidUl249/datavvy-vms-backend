@@ -92,7 +92,7 @@ Credentials are never in the repo. The API reads them from environment variables
 | `VMS_DB_URL`, `VMS_DB_USER`, `VMS_DB_PASSWORD` | Yes (not with the `h2` profile) | MySQL connection |
 | `VMS_JWT_SECRET` | Yes | Signs login tokens; 32+ random characters (`openssl rand -base64 48`) |
 | `VMS_CORS_ORIGINS` | No — default `http://localhost:*,http://127.0.0.1:*` | Browser origins allowed to call the API (comma-separated, `*` wildcards) |
-| `SPRING_PROFILES_ACTIVE` | No | `demo` = demo users and vehicles · `local` = `demo` + debug logs · `h2` = file database instead of MySQL |
+| `SPRING_PROFILES_ACTIVE` | No | `demo` = demo users and vehicles · `local` = `demo` + debug logs · `demo-bulk` (with `demo`) = 50 extra sample vehicles · `h2` = file database instead of MySQL |
 | `PORT` | No — default `8080` | HTTP port (Render sets it) |
 | `VMS_DB_POOL` | No — default `10` | Connection pool size |
 
@@ -112,7 +112,7 @@ flowchart LR
 Everything runs on free plans with no credit card.
 
 1. **Database:** create a free TiDB Cloud **Starter** cluster (AWS Singapore is closest to Render's Singapore region). From **Connect → Java**, note the host and user.
-2. **API:** Render → New → **Blueprint** → this repo. [`render.yaml`](render.yaml) sets the Docker build, free plan, Singapore region, health check, the `demo` profile and JVM flags for 512 MB, and generates `VMS_JWT_SECRET`. Fill in:
+2. **API:** Render → New → **Blueprint** → this repo. [`render.yaml`](render.yaml) sets the Docker build, free plan, Singapore region, health check, the `demo,demo-bulk` profiles (demo users + 58 sample vehicles) and JVM flags for 512 MB, and generates `VMS_JWT_SECRET`. Fill in:
    - `VMS_DB_URL` = `jdbc:mysql://<host>:4000/vms?sslMode=VERIFY_IDENTITY&createDatabaseIfNotExist=true`
    - `VMS_DB_USER`, `VMS_DB_PASSWORD` (from TiDB)
    - `VMS_CORS_ORIGINS` = the Netlify site URL

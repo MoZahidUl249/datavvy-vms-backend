@@ -14,7 +14,7 @@ services:
     healthCheckPath: /actuator/health/readiness   # includes the database
     envVars:
       - key: SPRING_PROFILES_ACTIVE
-        value: demo       # schema + demo users and vehicles; remove for real data
+        value: demo,demo-bulk   # schema + demo users + 58 sample vehicles; remove for real data
       - key: VMS_DB_URL   # e.g. jdbc:mysql://<host>:4000/vms?sslMode=VERIFY_IDENTITY&createDatabaseIfNotExist=true
         sync: false
       - key: VMS_DB_USER

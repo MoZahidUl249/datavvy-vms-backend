@@ -1,0 +1,11 @@
+# `demo-bulk` profile: use together with `demo` (SPRING_PROFILES_ACTIVE=demo,demo-bulk)
+# to add 50 extra sample vehicles for the public demo. Tests and local runs keep the
+# 8-vehicle seed. Never enable on real data.
+spring:
+  flyway:
+    locations:
+      - classpath:db/migration/auth
+      - classpath:db/migration/catalog
+      - classpath:db/migration/vehicle
+      - classpath:db/seed
+      - classpath:db/seed-bulk
