@@ -5,10 +5,16 @@ import com.datavvy.vms.vehicle.api.VehicleStats;
 import com.datavvy.vms.vehicle.api.VehicleStatus;
 import com.datavvy.vms.vehicle.api.VehicleSummary;
 import com.datavvy.vms.vehicle.domain.NameCount;
+import com.datavvy.vms.vehicle.domain.VehicleNumber;
 import com.datavvy.vms.vehicle.domain.VehicleRepository;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,6 +47,30 @@ class VehicleQueryService implements VehicleQueryApi {
     public List<VehicleSummary> withStatus(VehicleStatus status, int limit) {
         return vehicles.findByStatusOrderByUpdatedAtDesc(status, PageRequest.of(0, limit)).stream()
                 .map(VehicleMapper::toSummary).toList();
+    }
+
+    @Override
+    public Optional<VehicleSummary> find(Long id) {
+        return id == null ? Optional.empty() : vehicles.findById(id).map(VehicleMapper::toSummary);
+    }
+
+    @Override
+    public Map<Long, VehicleSummary> findAll(Collection<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return Map.of();
+        }
+        return vehicles.findAllById(Set.copyOf(ids)).stream()
+                .map(VehicleMapper::toSummary)
+                .collect(Collectors.toMap(VehicleSummary::id, Function.identity()));
+    }
+
+    @Override
+    public Set<Long> idsWithNumberLike(String q) {
+        String key = VehicleNumber.key(q);
+        if (key.isBlank()) {
+            return Set.of();
+        }
+        return Set.copyOf(vehicles.idsWithNumberKeyLike("%" + key + "%"));
     }
 
     static Map<String, Long> toMap(List<NameCount> counts) {

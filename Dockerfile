@@ -6,6 +6,9 @@ COPY vms-platform/pom.xml vms-platform/
 COPY vms-auth/pom.xml vms-auth/
 COPY vms-catalog/pom.xml vms-catalog/
 COPY vms-vehicle/pom.xml vms-vehicle/
+COPY vms-document/pom.xml vms-document/
+COPY vms-maintenance/pom.xml vms-maintenance/
+COPY vms-driver/pom.xml vms-driver/
 COPY vms-dashboard/pom.xml vms-dashboard/
 COPY vms-app/pom.xml vms-app/
 RUN mvn -B -q dependency:go-offline

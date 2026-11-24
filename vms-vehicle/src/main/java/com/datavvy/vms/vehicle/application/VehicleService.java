@@ -9,6 +9,7 @@ import com.datavvy.vms.platform.error.FieldValidationException;
 import com.datavvy.vms.platform.error.FieldValidationException.FieldMessage;
 import com.datavvy.vms.platform.error.NotFoundException;
 import com.datavvy.vms.platform.web.PageResponse;
+import com.datavvy.vms.vehicle.api.VehicleDeletedEvent;
 import com.datavvy.vms.vehicle.api.VehicleFacets;
 import com.datavvy.vms.vehicle.api.VehicleFilter;
 import com.datavvy.vms.vehicle.api.VehicleNumberCheckResponse;
@@ -30,6 +31,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -58,11 +60,14 @@ public class VehicleService {
     private final VehicleRepository vehicles;
     private final CatalogLookup catalog;
     private final ZoneId zone;
+    private final ApplicationEventPublisher events;
 
-    public VehicleService(VehicleRepository vehicles, CatalogLookup catalog, PlatformProperties platform) {
+    public VehicleService(VehicleRepository vehicles, CatalogLookup catalog, PlatformProperties platform,
+            ApplicationEventPublisher events) {
         this.vehicles = vehicles;
         this.catalog = catalog;
         this.zone = platform.timeZone();
+        this.events = events;
     }
 
     // ---------------------------------------------------------------- queries
@@ -126,9 +131,16 @@ public class VehicleService {
         return VehicleMapper.toResponse(saveGuarded(vehicle));
     }
 
+    /**
+     * Deletes the vehicle and tells other modules (documents, maintenance,
+     * driver assignments) in the same transaction, so they clean up their
+     * records or the whole delete rolls back.
+     */
     @Transactional
     public void delete(Long id) {
-        vehicles.delete(load(id));
+        Vehicle vehicle = load(id);
+        vehicles.delete(vehicle);
+        events.publishEvent(new VehicleDeletedEvent(vehicle.getId(), vehicle.getVehicleNumber()));
     }
 
     // ---------------------------------------------------------------- helpers

@@ -22,6 +22,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 /**
@@ -113,6 +114,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 "The request body isn't valid JSON. Check commas, quotes and brackets.");
         pd.setProperty("code", "MALFORMED_REQUEST");
         return ResponseEntity.badRequest().body(pd);
+    }
+
+    /** Upload bigger than the servlet limit ({@code spring.servlet.multipart.max-file-size}). */
+    @Override
+    protected ResponseEntity<Object> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException ex,
+            HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.PAYLOAD_TOO_LARGE,
+                "The file is too large. Upload a scan or photo under 5 MB.");
+        pd.setProperty("code", "FILE_TOO_LARGE");
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(pd);
     }
 
     @ExceptionHandler(Exception.class)

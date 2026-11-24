@@ -7,4 +7,7 @@ spring:
       - classpath:db/migration/auth
       - classpath:db/migration/catalog
       - classpath:db/migration/vehicle
+      - classpath:db/migration/document
+      - classpath:db/migration/maintenance
+      - classpath:db/migration/driver
       - classpath:db/seed

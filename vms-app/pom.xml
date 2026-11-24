@@ -25,6 +25,18 @@
     </dependency>
     <dependency>
       <groupId>com.datavvy.vms</groupId>
+      <artifactId>vms-document</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.datavvy.vms</groupId>
+      <artifactId>vms-maintenance</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.datavvy.vms</groupId>
+      <artifactId>vms-driver</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.datavvy.vms</groupId>
       <artifactId>vms-dashboard</artifactId>
     </dependency>
     <dependency>

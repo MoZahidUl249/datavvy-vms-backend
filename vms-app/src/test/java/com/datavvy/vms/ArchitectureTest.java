@@ -20,7 +20,8 @@ import org.junit.jupiter.api.TestFactory;
 class ArchitectureTest {
 
     private static final String ROOT = "com.datavvy.vms";
-    private static final List<String> MODULES = List.of("auth", "catalog", "vehicle", "dashboard");
+    private static final List<String> MODULES = List.of(
+            "auth", "catalog", "vehicle", "document", "maintenance", "driver", "dashboard");
     private static final String[] INTERNAL = {"domain", "application", "web", "config"};
 
     private static JavaClasses classes;

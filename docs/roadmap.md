@@ -19,10 +19,10 @@ roles (admin / fleet manager / viewer).
 ## Phase 2 — new modules (each = backend module + Flutter feature package)
 | Module | Owns | Notes |
 |---|---|---|
-| maintenance | service records, schedules | reminders by date / odometer |
+| maintenance | ✅ service records + history (Nov 2026) | next: schedules, reminders by date / odometer |
 | fuel | fuel logs, cost per km | needs odometer readings |
-| drivers | drivers, licences, assignment | links driver ⇄ vehicle |
-| documents | registration, fitness, tax token, insurance expiry | file storage + expiry alerts |
+| drivers | ✅ drivers, licences, assignment + history (Nov 2026) | next: driver login, duty roster |
+| documents | ✅ upload + expiry tracking (Nov 2026) | next: email/SMS expiry alerts (notifications), object storage (ADR-0007) |
 | trips | trip log, utilisation | later: GPS integration |
 | notifications | email/SMS digests | consumes events from other modules |
 

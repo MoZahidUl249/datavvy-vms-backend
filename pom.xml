@@ -27,6 +27,9 @@
     <module>vms-auth</module>
     <module>vms-catalog</module>
     <module>vms-vehicle</module>
+    <module>vms-document</module>
+    <module>vms-maintenance</module>
+    <module>vms-driver</module>
     <module>vms-dashboard</module>
     <module>vms-app</module>
   </modules>
@@ -57,6 +60,21 @@
       <dependency>
         <groupId>com.datavvy.vms</groupId>
         <artifactId>vms-vehicle</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.datavvy.vms</groupId>
+        <artifactId>vms-document</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.datavvy.vms</groupId>
+        <artifactId>vms-maintenance</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.datavvy.vms</groupId>
+        <artifactId>vms-driver</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>

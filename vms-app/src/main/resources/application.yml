@@ -29,6 +29,9 @@ spring:
       - classpath:db/migration/auth
       - classpath:db/migration/catalog
       - classpath:db/migration/vehicle
+      - classpath:db/migration/document
+      - classpath:db/migration/maintenance
+      - classpath:db/migration/driver
     out-of-order: true        # timestamp versions from parallel branches
   data:
     web:
@@ -37,6 +40,12 @@ spring:
   mvc:
     problemdetails:
       enabled: true
+  servlet:
+    multipart:
+      # Servlet ceiling; the document module enforces its own, smaller limit
+      # (vms.documents.max-file-size) with a friendly field error.
+      max-file-size: 10MB
+      max-request-size: 11MB
 
 server:
   port: ${PORT:8080}
@@ -46,6 +55,11 @@ server:
 
 vms:
   time-zone: Asia/Dhaka
+  documents:
+    expiring-soon-days: 30
+    max-file-size: 5MB
+  drivers:
+    license-expiring-soon-days: 30
   security:
     jwt-secret: ${VMS_JWT_SECRET}   # 32+ characters, e.g. `openssl rand -base64 48`
     issuer: datavvy-vms

@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -40,11 +41,14 @@ class VehicleServiceTest {
     @Mock
     CatalogLookup catalog;
 
+    @Mock
+    ApplicationEventPublisher events;
+
     VehicleService service;
 
     @BeforeEach
     void setUp() {
-        service = new VehicleService(vehicles, catalog, new PlatformProperties(null));
+        service = new VehicleService(vehicles, catalog, new PlatformProperties(null), events);
     }
 
     @Test

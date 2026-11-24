@@ -42,7 +42,11 @@ Every vehicle has exactly **Vehicle Number, Company, Type, Brand, Model, Status*
 | **Status** | `ACTIVE` / `INACTIVE` / `MAINTENANCE` (enum + database `CHECK`) |
 | **Managed vehicle types** | Type must be one of the catalog types; types in use can't be renamed or removed |
 | **Safe concurrent edits** | Optimistic locking: a stale `version` gets 409 `STALE_VERSION` |
-| **Dashboard** | One summary call: totals by status, by type, by brand, recently updated, in maintenance |
+| **Dashboard** | One summary call: vehicle totals by status, type and brand; documents expired / expiring; maintenance cost this month and by month; drivers on a vehicle / available |
+| **Vehicle documents** | Upload Registration, Tax Token, Insurance, Fitness, Route Permit and other papers (PDF / photo, type checked from the bytes, 5 MB); expiry tracking: EXPIRED / EXPIRING_SOON (30 days) / VALID / NO_EXPIRY; fleet-wide "needs attention" list |
+| **Maintenance** | Service / repair records (date, type, cost, workshop, odometer, notes); per-vehicle history with totals; fleet log with filters; odometer can't go backwards |
+| **Drivers** | Driver CRUD (BD mobile, unique licence, licence expiry, status); assign / change / unassign a vehicle's driver with full history; one driver per vehicle enforced in the service and the database |
+| **Search, filter, sort, page** | Server-side on vehicles, documents, maintenance and drivers |
 | **Roles** | Admin (everything) · Fleet manager (vehicles) · Viewer (read only, 403 on writes) |
 
 ---
@@ -136,6 +140,10 @@ Full reference with examples: **[`API.md`](API.md)** · contract: [`contracts/op
 | DELETE | `/api/v1/vehicles/{id}` | 204 | 403, 404 |
 | GET | `/api/v1/vehicles/facets`, `/api/v1/vehicles/number-check` | 200 | UI helpers |
 | GET/POST/PATCH/DELETE | `/api/v1/catalog/vehicle-types` | | 409 `CATALOG_ITEM_IN_USE`, 422 `CATALOG_KEEP_ONE` |
+| GET/POST | `/api/v1/vehicles/{id}/documents`, `/api/v1/documents[/summary\|/{id}\|/{id}/file]` | 200 / 201 | 400 file / expiry rules, 413 `FILE_TOO_LARGE` |
+| GET/POST | `/api/v1/vehicles/{id}/maintenance[/summary]`, `/api/v1/maintenance[/stats\|/{id}]` | 200 / 201 | 400 future date / odometer |
+| GET/POST/PUT/DELETE | `/api/v1/drivers[/{id}\|/stats\|/{id}/assignments]` | 200 / 201 / 204 | 409 `DUPLICATE_LICENSE_NUMBER`, `DRIVER_ASSIGNED` |
+| GET/PUT/DELETE | `/api/v1/vehicles/{id}/assignment[/history]` | 200 / 204 | 409 `DRIVER_ASSIGNED_ELSEWHERE`, 422 `VEHICLE_INACTIVE` / `DRIVER_NOT_ACTIVE` / `DRIVER_LICENSE_EXPIRED` |
 | GET | `/api/v1/dashboard/summary` | 200 | |
 
 Every error has the same shape (RFC 9457 problem document), and clients branch on `code`, never on the message:
@@ -174,10 +182,12 @@ Every error has the same shape (RFC 9457 problem document), and clients branch o
 ```mermaid
 flowchart LR
   App[vms-app] --> Auth[vms-auth] & Veh[vms-vehicle] & Cat[vms-catalog] & Dash[vms-dashboard]
-  Dash -- api --> Veh
-  Dash -- api --> Cat
+  App --> Doc[vms-document] & Mnt[vms-maintenance] & Drv[vms-driver]
+  Doc & Mnt & Drv -- api --> Veh
+  Veh -. VehicleDeletedEvent .-> Doc & Mnt & Drv
+  Dash -- api --> Veh & Cat & Doc & Mnt & Drv
   Veh -- api --> Cat
-  Auth & Veh & Cat & Dash --> P[vms-platform]
+  Auth & Veh & Cat & Dash & Doc & Mnt & Drv --> P[vms-platform]
   App --> DB[(MySQL / H2<br/>Flyway per module)]
 ```
 
@@ -187,6 +197,9 @@ flowchart LR
 | `vms-auth` | Users, login, JWT, security filter chain | `auth.api` |
 | `vms-catalog` | Vehicle types (`catalog_item`) | `CatalogLookup`, `CatalogUsageProvider` (an extension point vehicle implements) |
 | `vms-vehicle` | Vehicles, CRUD, the duplicate rule | `VehicleQueryApi` |
+| `vms-document` | Vehicle papers + files, expiry tracking (`vehicle_document`, `vehicle_document_file`) | `DocumentQueryApi` |
+| `vms-maintenance` | Service / repair records and history (`maintenance_record`) | `MaintenanceQueryApi` |
+| `vms-driver` | Drivers, vehicle assignment and its history (`driver`, `driver_assignment`) | `DriverQueryApi` |
 | `vms-dashboard` | Read-only summary; no tables | `dashboard.api` |
 | `vms-app` | Boot class, configuration, demo seed data, cross-module tests | — |
 
@@ -228,6 +241,8 @@ Each module: `api/` (public records and interfaces) · `web/` (controllers) · `
 | `VmsApiIntegrationTest` | `vms-app` | Login, token required, catalog, dashboard, current user |
 | `ArchitectureTest` | `vms-app` (ArchUnit) | Module boundaries, platform independence, layering |
 | `ConfigHygieneTest` | `vms-app` | No credential fallbacks or literal secrets in any profile |
+| `FleetManagementApiIntegrationTest` | `vms-app` | Upload + download, type detected from bytes, expiry rules and filters, renewal + stale version; maintenance history, future date, odometer; drivers (phone, duplicate licence, filters); assign / move / unassign + history, 422 rules; vehicle delete cleans up; dashboard figures; viewer 403s |
+| `ExpiryTest`, `FileKindTest`, `SafeFileNameTest`, `PhoneAndLicenceTest` | platform, document, driver | The pure rules |
 
 ```bash
 mvn verify                    # or double-click run-backend-tests.command
