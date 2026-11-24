@@ -10,6 +10,8 @@ flowchart LR
     A --> F2[feature_dashboard]
     A --> F3[feature_vehicles]
     A --> F4[feature_settings]
+    A --> F5[feature_drivers · feature_documents · feature_maintenance]
+    F3 & F5 & F2 --> R[vms_fleet_records]
     F3 & F4 --> C[vms_catalog]
     F1 & F2 & F3 & F4 & C --> K[vms_core<br/>ApiClient · Session · Routes]
     F1 & F2 & F3 & F4 --> D[vms_design_system]
@@ -20,11 +22,15 @@ flowchart LR
     B --> VE[vms-vehicle]
     B --> CA[vms-catalog]
     B --> DA[vms-dashboard]
+    B --> DO[vms-document] & MA[vms-maintenance] & DR[vms-driver]
+    DO & MA & DR -- api --> VE
+    VE -. VehicleDeletedEvent .-> DO & MA & DR
     DA -- api --> VE
     DA -- api --> CA
+    DA -- api --> DO & MA & DR
     VE -- api --> CA
     CA -. SPI usage counts .-> VE
-    AU & VE & CA & DA --> P[vms-platform]
+    AU & VE & CA & DA & DO & MA & DR --> P[vms-platform]
   end
   B --> DB[(MySQL 8.4<br/>Flyway per module)]
 ```

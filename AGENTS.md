@@ -69,10 +69,14 @@ Parallel agents: one module per agent, each on its own branch/worktree.
 | `vms-auth` | `…auth` | users, login, JWT, security filter chain | `auth.api` |
 | `vms-catalog` | `…catalog` | vehicle types (`catalog_item`) | `catalog.api` (`CatalogLookup`, `CatalogUsageProvider` SPI) |
 | `vms-vehicle` | `…vehicle` | fleet register (`vehicle`: vehicle number, company, type, brand, model, status) — API in `API.md` | `vehicle.api` (`VehicleQueryApi`) |
+| `vms-document` | `…document` | vehicle papers + files, expiry (`vehicle_document`, `vehicle_document_file`) | `document.api` (`DocumentQueryApi`) |
+| `vms-maintenance` | `…maintenance` | service / repair records (`maintenance_record`) | `maintenance.api` (`MaintenanceQueryApi`) |
+| `vms-driver` | `…driver` | drivers + vehicle assignment history (`driver`, `driver_assignment`) | `driver.api` (`DriverQueryApi`) |
 | `vms-dashboard` | `…dashboard` | nothing persisted; read model | `dashboard.api` |
 | `vms-app` | `com.datavvy.vms` | boot class, config, seed data, cross-module tests | — |
 
-Dependency direction: `platform ← auth`, `platform ← catalog ← vehicle ← dashboard`.
+Dependency direction: `platform ← auth`, `platform ← catalog ← vehicle ← {document, maintenance, driver} ← dashboard`.
+Modules that keep rows per vehicle listen for `VehicleDeletedEvent` (vehicle.api) to clean up (ADR-0007).
 Never the other way. If catalog needs vehicle data, it defines an SPI in
 `catalog.api` and vehicle implements it (see `CatalogUsageProvider`).
 
