@@ -7,6 +7,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface VehicleRepository extends JpaRepository<Vehicle, Long>, JpaSpecificationExecutor<Vehicle> {
 
@@ -37,4 +38,7 @@ public interface VehicleRepository extends JpaRepository<Vehicle, Long>, JpaSpec
     List<Vehicle> findRecentlyUpdated(Pageable pageable);
 
     List<Vehicle> findByStatusOrderByUpdatedAtDesc(VehicleStatus status, Pageable pageable);
+
+    @Query("select v.id from Vehicle v where v.vehicleNumberKey like :pattern")
+    List<Long> idsWithNumberKeyLike(@Param("pattern") String pattern);
 }

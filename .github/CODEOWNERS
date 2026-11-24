@@ -17,6 +17,9 @@
 /vms-auth/                 @datavvy/platform-team
 /vms-catalog/              @datavvy/fleet-settings-team
 /vms-vehicle/              @datavvy/fleet-core-team
+/vms-document/             @datavvy/fleet-compliance-team
+/vms-maintenance/          @datavvy/fleet-operations-team
+/vms-driver/               @datavvy/fleet-operations-team
 /vms-dashboard/            @datavvy/insights-team
 /vms-app/                  @datavvy/backend-leads
 

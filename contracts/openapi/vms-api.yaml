@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Datavvy VMS API
-  version: 1.0.0
+  version: 1.1.0
   description: |
     Contract between the Flutter web client and the Spring Boot backend.
 
@@ -26,6 +26,9 @@ tags:
   - name: Auth
   - name: Vehicles
   - name: Catalog
+  - name: Documents
+  - name: Maintenance
+  - name: Drivers
   - name: Dashboard
 
 paths:
@@ -247,6 +250,475 @@ paths:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
 
+  # ---------------------------------------------------------------- documents
+
+  /vehicles/{vehicleId}/documents:
+    parameters:
+      - { name: vehicleId, in: path, required: true, schema: { type: integer, format: int64 } }
+    get:
+      tags: [Documents]
+      summary: A vehicle's documents (expired first, then expiring soon, valid, no expiry)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Document' } }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Documents]
+      summary: Upload a document (ADMIN, FLEET_MANAGER)
+      description: |
+        Multipart form. The file type is detected from its bytes (PDF, JPG, PNG, WEBP); max 5 MB.
+        TAX_TOKEN, INSURANCE, FITNESS and ROUTE_PERMIT need `expiryDate`; OTHER needs `title`.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, type]
+              properties:
+                file: { type: string, format: binary }
+                type: { $ref: '#/components/schemas/DocumentType' }
+                title: { type: string, maxLength: 120 }
+                documentNumber: { type: string, maxLength: 60 }
+                issueDate: { type: string, format: date }
+                expiryDate: { type: string, format: date }
+                notes: { type: string, maxLength: 500 }
+      responses:
+        '201':
+          description: Created. `Location` points at the document.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Document' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413':
+          description: "code: FILE_TOO_LARGE (over the 10 MB server limit)"
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /documents:
+    get:
+      tags: [Documents]
+      summary: Fleet-wide documents (filter by expiry state, type, vehicle; search; sort; page)
+      parameters:
+        - { name: vehicleId, in: query, schema: { type: integer, format: int64 } }
+        - { name: type, in: query, style: form, explode: true, schema: { type: array, items: { $ref: '#/components/schemas/DocumentType' } } }
+        - name: expiry
+          in: query
+          description: OR-ed; `expiry=EXPIRED&expiry=EXPIRING_SOON` = needs attention.
+          style: form
+          explode: true
+          schema: { type: array, items: { $ref: '#/components/schemas/ExpiryStatus' } }
+        - { name: q, in: query, description: Vehicle number (ignoring spaces/hyphens), title or document number., schema: { type: string } }
+        - { name: page, in: query, schema: { type: integer, default: 0, minimum: 0 } }
+        - { name: size, in: query, schema: { type: integer, default: 20, maximum: 100 } }
+        - name: sort
+          in: query
+          description: "`field,asc|desc`. Fields: expiryDate, issueDate, type, createdAt, updatedAt."
+          schema: { type: string, default: 'expiryDate,asc' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentPage' }
+
+  /documents/summary:
+    get:
+      tags: [Documents]
+      summary: Document counts by expiry state
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentStats' }
+
+  /documents/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+    get:
+      tags: [Documents]
+      summary: Get one document's details
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Document' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Documents]
+      summary: Update details, e.g. a renewal's new expiry date (send `version`)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DocumentRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Document' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: "code: STALE_VERSION"
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+    delete:
+      tags: [Documents]
+      summary: Delete a document and its file (ADMIN, FLEET_MANAGER)
+      responses:
+        '204': { description: Deleted }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /documents/{id}/file:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+    get:
+      tags: [Documents]
+      summary: Download the stored file
+      parameters:
+        - { name: inline, in: query, description: true = show in the browser instead of downloading., schema: { type: boolean, default: false } }
+      responses:
+        '200':
+          description: The file, with its detected Content-Type and a Content-Disposition file name.
+          content:
+            application/pdf: { schema: { type: string, format: binary } }
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/png: { schema: { type: string, format: binary } }
+            image/webp: { schema: { type: string, format: binary } }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Documents]
+      summary: Replace the file (e.g. the renewed paper) (ADMIN, FLEET_MANAGER)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Document' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # -------------------------------------------------------------- maintenance
+
+  /vehicles/{vehicleId}/maintenance:
+    parameters:
+      - { name: vehicleId, in: path, required: true, schema: { type: integer, format: int64 } }
+    get:
+      tags: [Maintenance]
+      summary: A vehicle's maintenance history (newest first)
+      parameters:
+        - { name: page, in: query, schema: { type: integer, default: 0 } }
+        - { name: size, in: query, schema: { type: integer, default: 20, maximum: 100 } }
+        - { name: sort, in: query, description: "Fields: serviceDate, cost, type, vendor, createdAt.", schema: { type: string, default: 'serviceDate,desc' } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MaintenancePage' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Maintenance]
+      summary: Record service or repair work (ADMIN, FLEET_MANAGER)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MaintenanceRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MaintenanceRecord' }
+        '400':
+          description: "code: VALIDATION_FAILED — includes a future service date or an odometer lower than an earlier record"
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /vehicles/{vehicleId}/maintenance/summary:
+    parameters:
+      - { name: vehicleId, in: path, required: true, schema: { type: integer, format: int64 } }
+    get:
+      tags: [Maintenance]
+      summary: Header of a vehicle's history (count, total cost, last service)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MaintenanceHistorySummary' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /maintenance:
+    get:
+      tags: [Maintenance]
+      summary: Fleet maintenance log (filter, search, sort, page)
+      parameters:
+        - { name: vehicleId, in: query, schema: { type: integer, format: int64 } }
+        - { name: type, in: query, style: form, explode: true, schema: { type: array, items: { $ref: '#/components/schemas/MaintenanceType' } } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: q, in: query, description: Vehicle number, workshop or notes., schema: { type: string } }
+        - { name: page, in: query, schema: { type: integer, default: 0 } }
+        - { name: size, in: query, schema: { type: integer, default: 20, maximum: 100 } }
+        - { name: sort, in: query, description: "Fields: serviceDate, cost, type, vendor, createdAt.", schema: { type: string, default: 'serviceDate,desc' } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MaintenancePage' }
+
+  /maintenance/stats:
+    get:
+      tags: [Maintenance]
+      summary: Fleet maintenance figures (also part of the dashboard)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MaintenanceStats' }
+
+  /maintenance/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+    get:
+      tags: [Maintenance]
+      summary: Get one record
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MaintenanceRecord' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Maintenance]
+      summary: Correct a record (send `version`)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MaintenanceRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MaintenanceRecord' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: "code: STALE_VERSION"
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+    delete:
+      tags: [Maintenance]
+      summary: Delete a record (ADMIN, FLEET_MANAGER)
+      responses:
+        '204': { description: Deleted }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ------------------------------------------------------------------ drivers
+
+  /drivers:
+    get:
+      tags: [Drivers]
+      summary: List drivers (search, filter, sort, page)
+      parameters:
+        - { name: q, in: query, description: Name, mobile number or licence number., schema: { type: string } }
+        - { name: status, in: query, style: form, explode: true, schema: { type: array, items: { $ref: '#/components/schemas/DriverStatus' } } }
+        - { name: assigned, in: query, description: true = on a vehicle, false = available., schema: { type: boolean } }
+        - { name: page, in: query, schema: { type: integer, default: 0 } }
+        - { name: size, in: query, schema: { type: integer, default: 20, maximum: 100 } }
+        - { name: sort, in: query, description: "Fields: fullName, licenseExpiry, status, joinedOn, createdAt, updatedAt.", schema: { type: string, default: 'fullName,asc' } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DriverPage' }
+    post:
+      tags: [Drivers]
+      summary: Add a driver (ADMIN, FLEET_MANAGER)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DriverRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Driver' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: "code: DUPLICATE_LICENSE_NUMBER (details.field, details.existingId, details.existingName)"
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /drivers/stats:
+    get:
+      tags: [Drivers]
+      summary: Driver counts (also part of the dashboard)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DriverStats' }
+
+  /drivers/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+    get:
+      tags: [Drivers]
+      summary: Get one driver
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Driver' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Drivers]
+      summary: Update a driver (send `version`)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DriverRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Driver' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: "code: DUPLICATE_LICENSE_NUMBER or STALE_VERSION"
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+    delete:
+      tags: [Drivers]
+      summary: Delete a driver (ADMIN, FLEET_MANAGER). Assignment history is kept.
+      responses:
+        '204': { description: Deleted }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: "code: DRIVER_ASSIGNED — unassign from the vehicle first (details.vehicleId, details.vehicleNumber)"
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /drivers/{id}/assignments:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+    get:
+      tags: [Drivers]
+      summary: Vehicles this driver has driven, newest first
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/AssignmentRecord' } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /vehicles/{vehicleId}/assignment:
+    parameters:
+      - { name: vehicleId, in: path, required: true, schema: { type: integer, format: int64 } }
+    get:
+      tags: [Drivers]
+      summary: The vehicle's current driver (`driver` null when unassigned)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VehicleAssignment' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Drivers]
+      summary: Assign or change the driver (ADMIN, FLEET_MANAGER)
+      description: The previous assignment is closed and kept in history.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AssignmentRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VehicleAssignment' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: "code: DRIVER_ASSIGNED_ELSEWHERE (details.vehicleId, details.vehicleNumber) — resend with reassign=true to move the driver; or ASSIGNMENT_CONFLICT"
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '422':
+          description: "code: VEHICLE_INACTIVE, DRIVER_NOT_ACTIVE or DRIVER_LICENSE_EXPIRED"
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+    delete:
+      tags: [Drivers]
+      summary: Remove the driver from the vehicle (ADMIN, FLEET_MANAGER)
+      responses:
+        '204': { description: Unassigned (also when nobody was assigned) }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /vehicles/{vehicleId}/assignment/history:
+    parameters:
+      - { name: vehicleId, in: path, required: true, schema: { type: integer, format: int64 } }
+    get:
+      tags: [Drivers]
+      summary: Who has driven this vehicle, newest first
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/AssignmentRecord' } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /dashboard/summary:
     get:
       tags: [Dashboard]
@@ -451,9 +923,277 @@ components:
         inMaintenance:
           type: array
           items: { $ref: '#/components/schemas/VehicleSummary' }
+        documents: { $ref: '#/components/schemas/DocumentStats' }
+        documentAlerts:
+          type: array
+          description: Expired and expiring-soon documents, soonest first (max 5).
+          items: { $ref: '#/components/schemas/DocumentAlert' }
+        maintenance: { $ref: '#/components/schemas/MaintenanceStats' }
+        recentMaintenance:
+          type: array
+          items: { $ref: '#/components/schemas/MaintenanceRecord' }
+        drivers: { $ref: '#/components/schemas/DriverStats' }
 
     Slice:
       type: object
       properties:
         name: { type: string }
         count: { type: integer, format: int64 }
+
+    ExpiryStatus:
+      type: string
+      description: "Today in Asia/Dhaka: EXPIRED (before today), EXPIRING_SOON (within the window, default 30 days), VALID, NO_EXPIRY (no date)."
+      enum: [EXPIRED, EXPIRING_SOON, VALID, NO_EXPIRY]
+
+    DocumentType:
+      type: string
+      enum: [REGISTRATION, TAX_TOKEN, INSURANCE, FITNESS, ROUTE_PERMIT, OTHER]
+
+    DocumentRequest:
+      type: object
+      required: [type]
+      properties:
+        type: { $ref: '#/components/schemas/DocumentType' }
+        title: { type: string, maxLength: 120, description: Required for OTHER., example: Smoke emission certificate }
+        documentNumber: { type: string, maxLength: 60, example: GDIC/MV/2026/88412 }
+        issueDate: { type: string, format: date }
+        expiryDate: { type: string, format: date, description: Required for TAX_TOKEN, INSURANCE, FITNESS, ROUTE_PERMIT. }
+        notes: { type: string, maxLength: 500 }
+        version: { type: integer, format: int64 }
+
+    Document:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        vehicleId: { type: integer, format: int64 }
+        vehicleNumber: { type: string, nullable: true }
+        type: { $ref: '#/components/schemas/DocumentType' }
+        title: { type: string, nullable: true }
+        documentNumber: { type: string, nullable: true }
+        issueDate: { type: string, format: date, nullable: true }
+        expiryDate: { type: string, format: date, nullable: true }
+        expiryStatus: { $ref: '#/components/schemas/ExpiryStatus' }
+        daysUntilExpiry: { type: integer, nullable: true, description: Negative once expired. }
+        notes: { type: string, nullable: true }
+        fileName: { type: string, example: insurance-2026.pdf }
+        contentType: { type: string, enum: [application/pdf, image/jpeg, image/png, image/webp] }
+        sizeBytes: { type: integer, format: int64 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        updatedBy: { type: string, nullable: true }
+        version: { type: integer, format: int64 }
+
+    DocumentPage:
+      type: object
+      properties:
+        content: { type: array, items: { $ref: '#/components/schemas/Document' } }
+        page: { type: integer }
+        size: { type: integer }
+        totalElements: { type: integer, format: int64 }
+        totalPages: { type: integer }
+
+    DocumentStats:
+      type: object
+      properties:
+        total: { type: integer, format: int64 }
+        valid: { type: integer, format: int64 }
+        expiringSoon: { type: integer, format: int64 }
+        expired: { type: integer, format: int64 }
+        noExpiry: { type: integer, format: int64 }
+        expiringSoonDays: { type: integer, example: 30 }
+
+    DocumentAlert:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        vehicleId: { type: integer, format: int64 }
+        vehicleNumber: { type: string, nullable: true }
+        type: { $ref: '#/components/schemas/DocumentType' }
+        title: { type: string, nullable: true }
+        expiryDate: { type: string, format: date }
+        expiryStatus: { $ref: '#/components/schemas/ExpiryStatus' }
+        daysUntilExpiry: { type: integer }
+
+    MaintenanceType:
+      type: string
+      enum: [ROUTINE_SERVICE, OIL_CHANGE, TYRES, BATTERY, BRAKES, ENGINE, ELECTRICAL, BODY_WORK, INSPECTION, REPAIR, OTHER]
+
+    MaintenanceRequest:
+      type: object
+      required: [serviceDate, type, cost, vendor]
+      properties:
+        serviceDate: { type: string, format: date, description: Not in the future. }
+        type: { $ref: '#/components/schemas/MaintenanceType' }
+        cost: { type: number, minimum: 0, description: BDT, 2 decimals., example: 4500 }
+        vendor: { type: string, maxLength: 120, description: Workshop or vendor., example: Navana Service Centre }
+        odometerKm: { type: integer, minimum: 0, nullable: true, description: Can't be lower than an earlier record's reading. }
+        notes: { type: string, maxLength: 1000, nullable: true }
+        version: { type: integer, format: int64 }
+
+    MaintenanceRecord:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        vehicleId: { type: integer, format: int64 }
+        vehicleNumber: { type: string, nullable: true }
+        serviceDate: { type: string, format: date }
+        type: { $ref: '#/components/schemas/MaintenanceType' }
+        cost: { type: number }
+        vendor: { type: string }
+        odometerKm: { type: integer, nullable: true }
+        notes: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        createdBy: { type: string, nullable: true }
+        version: { type: integer, format: int64 }
+
+    MaintenancePage:
+      type: object
+      properties:
+        content: { type: array, items: { $ref: '#/components/schemas/MaintenanceRecord' } }
+        page: { type: integer }
+        size: { type: integer }
+        totalElements: { type: integer, format: int64 }
+        totalPages: { type: integer }
+
+    MaintenanceHistorySummary:
+      type: object
+      properties:
+        vehicleId: { type: integer, format: int64 }
+        recordCount: { type: integer, format: int64 }
+        totalCost: { type: number }
+        costLast12Months: { type: number }
+        lastServiceDate: { type: string, format: date, nullable: true }
+        lastServiceType: { allOf: [{ $ref: '#/components/schemas/MaintenanceType' }], nullable: true }
+        lastOdometerKm: { type: integer, nullable: true }
+
+    MaintenanceStats:
+      type: object
+      properties:
+        totalRecords: { type: integer, format: int64 }
+        totalCost: { type: number }
+        recordsThisMonth: { type: integer, format: int64 }
+        costThisMonth: { type: number }
+        vehiclesServicedLast30Days: { type: integer, format: int64 }
+        byMonth:
+          type: array
+          description: Last six calendar months, oldest first, empty months included.
+          items:
+            type: object
+            properties:
+              month: { type: string, example: '2026-11' }
+              count: { type: integer, format: int64 }
+              cost: { type: number }
+        byType:
+          type: array
+          items:
+            type: object
+            properties:
+              type: { $ref: '#/components/schemas/MaintenanceType' }
+              count: { type: integer, format: int64 }
+              cost: { type: number }
+
+    DriverStatus:
+      type: string
+      enum: [ACTIVE, ON_LEAVE, INACTIVE]
+
+    DriverRequest:
+      type: object
+      required: [fullName, phone, licenseNumber, licenseExpiry, status]
+      properties:
+        fullName: { type: string, maxLength: 100, example: Md. Rahim Uddin }
+        phone: { type: string, description: Bangladeshi mobile; stored as 01XXXXXXXXX., example: '+880 1711-000001' }
+        licenseNumber: { type: string, maxLength: 30, description: Unique ignoring case, spaces, hyphens and slashes., example: DK0123456C00001 }
+        licenseExpiry: { type: string, format: date }
+        address: { type: string, maxLength: 200, nullable: true }
+        joinedOn: { type: string, format: date, nullable: true }
+        status: { $ref: '#/components/schemas/DriverStatus' }
+        notes: { type: string, maxLength: 500, nullable: true }
+        version: { type: integer, format: int64 }
+
+    Driver:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        fullName: { type: string }
+        phone: { type: string, example: '01711000001' }
+        licenseNumber: { type: string }
+        licenseExpiry: { type: string, format: date }
+        licenseStatus: { $ref: '#/components/schemas/ExpiryStatus' }
+        licenseDaysLeft: { type: integer }
+        address: { type: string, nullable: true }
+        joinedOn: { type: string, format: date, nullable: true }
+        status: { $ref: '#/components/schemas/DriverStatus' }
+        notes: { type: string, nullable: true }
+        assignedVehicle:
+          type: object
+          nullable: true
+          properties:
+            vehicleId: { type: integer, format: int64 }
+            vehicleNumber: { type: string }
+            assignedAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        version: { type: integer, format: int64 }
+
+    DriverPage:
+      type: object
+      properties:
+        content: { type: array, items: { $ref: '#/components/schemas/Driver' } }
+        page: { type: integer }
+        size: { type: integer }
+        totalElements: { type: integer, format: int64 }
+        totalPages: { type: integer }
+
+    DriverSummary:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        fullName: { type: string }
+        phone: { type: string }
+        licenseNumber: { type: string }
+        licenseExpiry: { type: string, format: date }
+        licenseStatus: { $ref: '#/components/schemas/ExpiryStatus' }
+        status: { $ref: '#/components/schemas/DriverStatus' }
+
+    DriverStats:
+      type: object
+      properties:
+        total: { type: integer, format: int64 }
+        active: { type: integer, format: int64 }
+        onLeave: { type: integer, format: int64 }
+        inactive: { type: integer, format: int64 }
+        assigned: { type: integer, format: int64 }
+        available: { type: integer, format: int64, description: ACTIVE and not on a vehicle. }
+        licenseExpiringSoon: { type: integer, format: int64 }
+        licenseExpired: { type: integer, format: int64 }
+        expiringSoonDays: { type: integer }
+
+    AssignmentRequest:
+      type: object
+      required: [driverId]
+      properties:
+        driverId: { type: integer, format: int64 }
+        reassign: { type: boolean, default: false, description: Move the driver here if they are on another vehicle. }
+
+    VehicleAssignment:
+      type: object
+      properties:
+        vehicleId: { type: integer, format: int64 }
+        driver: { allOf: [{ $ref: '#/components/schemas/DriverSummary' }], nullable: true }
+        assignedAt: { type: string, format: date-time, nullable: true }
+        assignedBy: { type: string, nullable: true }
+
+    AssignmentRecord:
+      type: object
+      description: Names are snapshots from assignment time.
+      properties:
+        id: { type: integer, format: int64 }
+        vehicleId: { type: integer, format: int64 }
+        vehicleNumber: { type: string }
+        driverId: { type: integer, format: int64 }
+        driverName: { type: string }
+        assignedAt: { type: string, format: date-time }
+        assignedBy: { type: string, nullable: true }
+        releasedAt: { type: string, format: date-time, nullable: true }
+        releasedBy: { type: string, nullable: true }
